@@ -9,48 +9,74 @@ problem_id = Blast      # problem ID: basename of output filenames
 <output1>
 file_type  = vtk        # Binary data dump
 variable   = prim       # variables to be output
-dt         = 10       # time increment between outputs
-
+dt         = .01       # time increment between outputs
+<output2>
+file_type = hst
+dt        = .01
+<output3>
+file_type  = tab        # Binary data dump
+variable   = prim       # variables to be output
+dt         = .01       # time increment between outputs
 <time>
-cfl_number = 0.3        # The Courant, Friedrichs, & Lewy (CFL) Number
+cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
 nlim       = -1         # cycle limit
-tlim       = 1e6       # time limit
+tlim       = 0.5e2       # time limit
 integrator  = vl2       # time integration algorithm
 xorder      = 2         # order of spatial reconstruction
-ncycle_out  = 1         # interval for stdout summary info
+ncycle_out  = .01         # interval for stdout summary info
 
 <mesh>
-nx1        = 4000         # Number of zones in X1-direction
-x1min      = 2.5e7        # minimum value of X1
-x1max      = 8e13        # maximum value of X1
-ix1_bc     = outflow    # inner-X1 boundary flag
+nx1        = 1000         # Number of zones in X1-direction
+x1min      = 1e8        # minimum value of X1
+x1max      = 1.1e10        # maximum value of X1
+ix1_bc     = reflecting    # inner-X1 boundary flag
 ox1_bc     = outflow    # outer-X1 boundary flag
 
 nx2        = 1             # Number of zones in X2-direction
 x2min      = 0.0 #-1.57079632679 #0.52359877559  # minimum value of X2
 x2max      = 3.1415926535897931 # maximum value of X2
-ix2_bc     = outflow        # inner-X2 boundary flag
-ox2_bc     = outflow        # outer-X2 boundary flag
+ix2_bc     = periodic        # inner-X2 boundary flag
+ox2_bc     = periodic        # outer-X2 boundary flag
 
 nx3        = 1             # Number of zones in X3-direction
 x3min      = -0.78539816339 # minimum value of X3
 x3max      =  0.78539816339 # maximum value of X3
-ix3_bc     = outflow        # inner-X3 boundary flag
-ox3_bc     = outflow        # outer-X3 boundary flag
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
 
+#refinement = adaptive
+#derefinement_count = 10
+#numlevel = 15
 
 <hydro>
 gamma           = 1.3333333333333333  # gamma = C_p/C_v
 iso_sound_speed = 1.0
+dfloor = 1e-8
+pfloor = 1e-12
+<gravity>
+#mgmode = FMG
+#threshold = 0
+#output_defect = true
+#ix1_bc = reflecting
+#ox1_bc = reflecting
+#ix2_bc = periodic
+#ox2_bc = periodic
+#ix3_bc = periodic
+#ox3_bc = periodic
+
 
 <problem>
+data_filename = /home/sslocum/workspace/sne/athena_data/oneD_blast_sph/helium_data.txt
 compute_error = false         # check whether blast is spherical at end
-pamb          = 1e2           # ambient pressure
-damb          = 1e-7
-prat          = 1e12          # Pressure ratio initially
-drat          = 1e10
-ramp          = 5.9975e13
-radius        = 6e13          # Radius of the inner sphere
-x1_0          = 1.01e6           # r-coord of center of blast
+four_pi_g     = 8.38717e-7
+GM = 2.7846e25
+#pamb          = 1e2           # ambient pressure
+#damb          = 1e-7
+prat          = 1.0          # Pressure ratio initially
+#drat          = 1e10
+#ramp          = 5.9975e13
+radius        = 1.1e10          # Radius of the inner sphere
+x1_0          = 1e8           # r-coord of center of blast
 x2_0          = 1.0471975512  # theta-coord of center of blast (pi/3)
 x3_0          = 0.0           # phi-coord of center of blast
+thr           = .1
