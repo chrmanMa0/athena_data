@@ -29,13 +29,17 @@ R_dot = 6.957e10
 a = 7.5657e-15
 h1_early = .35
 h1_late = .1
-
+G = 6.674e-8
 
 #useful indices
 h1_fraction_column = 15
 cell_enclosed_mass = 1
 cell_outer_radius = 2
 cell_density = 4
+cell_velocity = 3
+cell_pressure = 6
+cell_energy_density = 7
+cell_temperature = 5
 """
 Usefull info about the columns of the 2sn data files
 
@@ -88,6 +92,7 @@ def strip_shell(full_star_np, h1_fraction_cutoff):
    h1_fraction_col = 15
 
    stripped_star_np = full_star_np[full_star_np[:, h1_fraction_col] <= h1_fraction_cutoff]
+   print(len(stripped_star_np))
    return stripped_star_np, stripped_star_np[-1,cell_enclosed_mass], stripped_star_np[-1,cell_outer_radius]
 
 def load_and_prep_data(filename):
@@ -125,7 +130,42 @@ def contract_stripped_data(stripped_data, pre_stripped_radius, stripped_radius):
     #Now we recalculate the density for each of the cells due to the new density
     stripped_data[:, 4] = stripped_data[:, 4] * R_ratio**3
     #Now we recalculate the mass of each cell based on new density and radius
+    cell_mass = np.diff(stripped_data[:, cell_enclosed_mass])
+    print(cell_mass)
+    print(stripped_data[:, cell_outer_radius]/R_dot)
 
+
+def collapse_inner_core(stripped_data, core_size):
+    print(core_size*M_dot)
+    without_core_np = stripped_data[stripped_data[:, cell_enclosed_mass] >= core_size*M_dot]
+    without_core_np[:,1] = without_core_np[:, 1] - core_size*M_dot
+    return (without_core_np, without_core_np[-1, 1])
+
+def convert_to_dimensionless(stripped_data, R_star, M_star):
+    """
+    This function converts the data to be dimensionless program units, allowing
+    us to use G as a value of 1 and making sure we don't run into floating point errors
+    when the exponents get too big.
+    """
+    L_0 = R_star #we want the data to be based on the radius of the star
+    M_0 = M_star #Same for the mass
+    rho_0 = M_0/(L_0)**3
+
+    v_0 = 1e8
+    t_0 = L_0/v_0#(((L_0)**3)/(G*M_0))**.5
+    P_0 = rho_0*v_0**2
+    T_0 = (P_0/a)**.25
+    G_0 = (G * rho_0*L_0**2)/v_0**2
+
+    scale_values = (L_0, M_0, rho_0, t_0, v_0, G_0, P_0, T_0)
+
+    stripped_data[:, cell_outer_radius] = stripped_data[:, cell_outer_radius]/L_0
+    stripped_data[:, cell_enclosed_mass] = stripped_data[:, cell_enclosed_mass]/M_0
+    stripped_data[:, cell_density] = stripped_data[:, cell_density]/rho_0
+    stripped_data[:, cell_pressure] = stripped_data[:, cell_pressure]/(rho_0 * v_0**2)
+    stripped_data[:, cell_energy_density] = stripped_data[:, cell_energy_density] / (rho_0 * v_0**2)
+    stripped_data[:, cell_temperature] = stripped_data[:, cell_temperature] / T_0
+    return stripped_data, scale_values
 
 
 def main():
@@ -135,8 +175,15 @@ def main():
     stripped_data, remaining_mass, outer_radius = strip_shell(full_data_np, h1_early)
     print(remaining_mass/M_dot)
     print(outer_radius/R_dot)
-
-
+    #contract_stripped_data(stripped_data, pre_stripped_radius, 2.0*R_dot)
+    stripped_data, mass_no_core = collapse_inner_core(stripped_data, 1.2)
+    print(stripped_data)
+    scaled_data, scale_values = convert_to_dimensionless(stripped_data, outer_radius, mass_no_core)
+    save_cols = [cell_outer_radius, cell_enclosed_mass, cell_density, cell_pressure, cell_energy_density, cell_temperature]
+    print(str(scale_values))
+    np.savetxt("save_test.txt", scaled_data[:, save_cols], header=str(scale_values)+"\n", comments="", fmt="%f", delimiter=" ")
+    print(scale_values)
+    print(scaled_data)
 
 if __name__ == "__main__":
     main()
