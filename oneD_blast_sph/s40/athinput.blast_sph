@@ -1,0 +1,90 @@
+<comment>
+problem   = spherical blast wave in spherical coordinates
+reference = Gardiner. T.A. & Stone, J.M., JCP, 205, 509 (2005) (for MHD version of test)
+configure = --prob=blast --coord=spherical_polar
+
+<job>
+problem_id = Blast      # problem ID: basename of output filenames
+
+<output1>
+file_type  = vtk        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.0e-4       # time increment between outputs
+<output2>
+file_type = hst
+dt        = 1.0e-4
+<output3>
+file_type  = tab        # Binary data dump
+variable   = prim       # variables to be output
+dt         = 1.0e-4       # time increment between outputs
+<output4>
+file_type = rst
+dt = 1e-4
+<time>
+cfl_number = 0.1        # The Courant, Friedrichs, & Lewy (CFL) Number
+nlim       = -1         # cycle limit
+tlim       =  8e-3      # time limit
+integrator  = vl2       # time integration algorithm
+xorder      = 2         # order of spatial reconstruction
+ncycle_out  = 1.0e-4         # interval for stdout summary info
+
+<mesh>
+nx1        = 1024         # Number of zones in X1-direction
+x1min      = 0.00529        # minimum value of X1
+x1max      = 50.0        # maximum value of X1
+ix1_bc     = reflecting    # inner-X1 boundary flag
+ox1_bc     = outflow    # outer-X1 boundary flag
+x1rat     = 1.013394
+
+nx2        = 1             # Number of zones in X2-direction
+x2min      = 0.0 #-1.57079632679 #0.52359877559  # minimum value of X2
+x2max      = 3.1415926535897931 # maximum value of X2
+ix2_bc     = periodic        # inner-X2 boundary flag
+ox2_bc     = periodic        # outer-X2 boundary flag
+
+nx3        = 1             # Number of zones in X3-direction
+x3min      = -0.78539816339 # minimum value of X3
+x3max      =  0.78539816339 # maximum value of X3
+ix3_bc     = periodic        # inner-X3 boundary flag
+ox3_bc     = periodic        # outer-X3 boundary flag
+
+#refinement = adaptive
+#derefinement_count = 10
+#numlevel = 15
+
+<hydro>
+gamma           = 1.3333333333333333  # gamma = C_p/C_v
+iso_sound_speed = 1.0
+dfloor = 1e-12
+pfloor = 1e-19
+<gravity>
+#mgmode = FMG
+#threshold = 0
+#output_defect = true
+#ix1_bc = reflecting
+#ox1_bc = reflecting
+#ix2_bc = periodic
+#ox2_bc = periodic
+#ix3_bc = periodic
+#ox3_bc = periodic
+
+
+<problem>
+#data_filename = /home/sslocum/workspace/sne/athena_data/oneD_blast_sph/helium_data.txt
+#wind_data_filename = /home/sslocum/workspace/sne/athena_data/oneD_blast_sph/wind_data_filename.txt
+data_filename = /home/sslocum/workspace/sne/athena_data/oneD_blast_sph/s40/s40.0-CS1.2-H1C0.35-1785270194.txt
+
+
+compute_error = false         # check whether blast is spherical at end
+#four_pi_g     =          # ambient pressure
+#damb          = 1e-7
+remnant_mass   = 0.168 #1.2 Solar Masses in program mass
+prat          = 1.0          # Pressure ratio initially
+#drat          = 1e10
+#ramp          = 5.9975e13
+radius        = 0.00529          # Radius of the inner sphere
+x1_0          = 0.00530           # r-coord of center of blast
+x2_0          = 1.0471975512  # theta-coord of center of blast (pi/3)
+x3_0          = 0.0           # phi-coord of center of blast
+r_star        = 1.0
+thr           = .1

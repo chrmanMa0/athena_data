@@ -4,7 +4,8 @@ os.environ["NUMEXPR_MAX_THREADS"] = "3232"
 
 import pandas as pd
 import numpy as np
-import uuid
+import time
+import argparse
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -31,7 +32,7 @@ a = 7.5657e-15
 h1_early = .35
 h1_late = .1
 G = 6.674e-8
-
+sigma = 5.670374e-5
 #useful indices
 h1_fraction_column = 15
 cell_enclosed_mass = 1
@@ -41,6 +42,7 @@ cell_velocity = 3
 cell_pressure = 6
 cell_energy_density = 7
 cell_temperature = 5
+he4_fraction_column = 17
 """
 Usefull info about the columns of the 2sn data files
 
@@ -96,6 +98,14 @@ def strip_shell(full_star_np, h1_fraction_cutoff):
    print(len(stripped_star_np))
    return stripped_star_np, stripped_star_np[-1,cell_enclosed_mass], stripped_star_np[-1,cell_outer_radius]
 
+def strip_to_temp(full_star_np, cuttoff_temp):
+    """
+    Strips the star based on a core surface temp max
+    """
+    stripped_star_np = full_star_np[full_star_np[:, cell_temperature] >= cuttoff_temp]
+    print(len(stripped_star_np))
+    return stripped_star_np, stripped_star_np[-1, cell_enclosed_mass], stripped_star_np[-1,cell_outer_radius]
+
 def load_and_prep_data(filename):
     """
     Reads the file and produces a numpy datafile
@@ -137,8 +147,12 @@ def contract_stripped_data(stripped_data, pre_stripped_radius, stripped_radius):
 
 
 def collapse_inner_core(stripped_data, core_size):
-    print(core_size*M_dot)
-    without_core_np = stripped_data[stripped_data[:, cell_enclosed_mass] >= core_size*M_dot]
+    coresize_g = core_size*M_dot
+    print(f"Core (g) {coresize_g}")
+    without_core_np = stripped_data[stripped_data[:, cell_enclosed_mass] >= coresize_g]
+    lowest_mass = without_core_np[0,1]
+    print(f"lowest_mass: {lowest_mass}")
+    #Removing the lost mass from each of the cells
     without_core_np[:,1] = without_core_np[:, 1] - core_size*M_dot
     return (without_core_np, without_core_np[-1, 1])
 
@@ -148,27 +162,37 @@ def convert_to_dimensionless(stripped_data, R_star, M_star):
     us to use G as a value of 1 and making sure we don't run into floating point errors
     when the exponents get too big.
     """
+    #conversion factors.  Divide cgs values by these to put into program units
     L_0 = R_star #we want the data to be based on the radius of the star
-    M_0 = M_star #Same for the mass
-    rho_0 = M_0/(L_0)**3
+    print(f"L_0: {L_0}")
 
+    M_0 = M_star #Same for the mass
+    print(f"M_0: {M_0}")
+    rho_0 = M_0/(L_0**3)
+    print(f"Rho_0: {rho_0}")
     v_0 = 1e8
     t_0 = L_0/v_0#(((L_0)**3)/(G*M_0))**.5
-    P_0 = rho_0*v_0**2
-    T_0 = (P_0/a)**.25
-    G_0 = (G * rho_0*L_0**2)/v_0**2
-
-    scale_values = (L_0, M_0, rho_0, t_0, v_0, G_0, P_0, T_0)
+    P_0 = rho_0*(v_0**2)
+    T_0 = 1.0e5 #(P_0/a_0)**.25
+    print(f"M_0: {M_0} L_0: {L_0} v_0: {v_0} t_0: {t_0} T_0: {T_0}")
+    sigma_0 = (M_0)/((t_0**3)*(T_0**4))
+    a_0 = (M_0*v_0**2)/(L_0**3 *T_0**4)
+    G_0 = (L_0 * v_0**2)/M_0
+    E_0 = (rho_0*v_0**2)
+    kappa_e0 = (L_0**2)/M_0
+    scale_values = (L_0, M_0, rho_0, t_0, v_0, G_0, P_0, T_0, E_0, a_0, sigma_0, kappa_e0)
 
     stripped_data[:, cell_outer_radius] = stripped_data[:, cell_outer_radius]/L_0
     stripped_data[:, cell_enclosed_mass] = stripped_data[:, cell_enclosed_mass]/M_0
     stripped_data[:, cell_density] = stripped_data[:, cell_density]/rho_0
+    cell_density_array = stripped_data[:, cell_density]
+    print(f"Density Data: {cell_density_array}")
     stripped_data[:, cell_pressure] = stripped_data[:, cell_pressure]/(rho_0 * v_0**2)
     stripped_data[:, cell_energy_density] = stripped_data[:, cell_energy_density] / (rho_0 * v_0**2)
     stripped_data[:, cell_temperature] = stripped_data[:, cell_temperature] / T_0
     return stripped_data, scale_values
 
-def store_data(filename, scale_values, stripped_data):
+def store_data(filename, scale_values, stripped_data, coresize, h1cutoff):
     """
     This function will store the two pieces of the input data in two separate files
     with matchin uuids.  One piece is the scale values used to generate the
@@ -181,28 +205,57 @@ def store_data(filename, scale_values, stripped_data):
     stripped_data (np array): The scaled values that will be needed to run athena
 
     """
-    my_uuid = uuid.uuid4()
-    filename = filename + "-" + str(my_uuid)
-    np.savetxt(filename+".txt", stripped_data, fmt="%f", delimiter=" ")
+    my_uuid = int(time.time())
+    filename = filename + "-CS" + str(coresize) + "-H1C" + str(h1cutoff) + "-" + str(my_uuid)
+    np.savetxt(filename+".txt", stripped_data, fmt="%.18e", delimiter=" ")
     np.savetxt(filename+"-scales.txt", scale_values)
 
 
 def main():
-    filename = "s25.0"
+    parser = argparse.ArgumentParser(description="Processes data from 2sn.org high mass star data to be run as Athena++ initial data.  This includes stripping star core, removing H1 envelope, and converting to program units")
+    parser.add_argument("filename", type=str, help="Name of file for processing e.g. s25.0")
+    parser.add_argument("-st", "--strip", type=bool, default=False, help="Specify whether or not to strip the envelope")
+    parser.add_argument("-cs", "--coresize", type=float, default=1.2, help="The size in solar masses of the collapsed remnant")
+    parser.add_argument("-h1c", "--h1cutoff", type=float, default=0.35, help="The cutoff fraction of H1 used to strip shell e.g. .35 for early .1 for late")
+    parser.add_argument("-stt", "--strip_to_temp", type=bool, default=False)
+    parser.add_argument("-tc", "--temp_cutoff", type=float, default=100000.0)
+    args = parser.parse_args()
+
+    filename = args.filename
+    coresize = args.coresize
+    h1cutoff = args.h1cutoff
+    strip = args.strip
+    print(args.strip)
+
+
+
+
     full_data_np = load_and_prep_data(filename)
     pre_stripped_radius = full_data_np[-1, cell_outer_radius]
-    stripped_data, remaining_mass, outer_radius = strip_shell(full_data_np, h1_early)
-    print(remaining_mass/M_dot)
-    print(outer_radius/R_dot)
+    #stripped_data, remaining_mass, outer_radius = strip_shell(full_data_np, h1cutoff)
+    data = full_data_np
+    remaining_mass = full_data_np[-1, cell_enclosed_mass]
+    outer_radius = full_data_np[-1, cell_outer_radius]
+
+    #if(strip):
+    #    print("We are stripping outer envelope")
+    #    data, remaining_mass, outer_radius = strip_shell(data, h1cutoff)
+    #    if(args.strip_to_temp == True):
+    #        data, remaining_mass, outer_radius = strip_to_temp(data, args.temp_cutoff)
+    #    print(remaining_mass/M_dot)
+    #    print(outer_radius/R_dot)
     #contract_stripped_data(stripped_data, pre_stripped_radius, 2.0*R_dot)
-    stripped_data, mass_no_core = collapse_inner_core(stripped_data, 1.2)
+    stripped_data, mass_no_core = collapse_inner_core(data, coresize)
     print(stripped_data)
-    scaled_data, scale_values = convert_to_dimensionless(stripped_data, outer_radius, mass_no_core)
-    save_cols = [cell_outer_radius, cell_enclosed_mass, cell_density, cell_pressure, cell_energy_density, cell_temperature]
+    scaled_data, scale_values = convert_to_dimensionless(data, outer_radius, mass_no_core)
+    save_cols = [cell_outer_radius, cell_enclosed_mass, cell_density, cell_pressure, cell_energy_density, cell_temperature, he4_fraction_column, h1_fraction_column]
     print(str(scale_values))
-    store_data("save_test", scale_values, scaled_data[:, save_cols])
+    print(f"Core size: {coresize}")
+    store_data(filename, scale_values, scaled_data[:, save_cols], coresize, h1cutoff)
+
     print(scale_values)
     print(scaled_data)
 
 if __name__ == "__main__":
     main()
+
